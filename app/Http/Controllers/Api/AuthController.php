@@ -10,7 +10,8 @@ use App\Models\User;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Mail;
-
+use GuzzleHttp\Client;
+use  App\Mail\AuthenticationMail;
 
 
 class AuthController extends Controller
@@ -18,14 +19,16 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
-            'email' => 'required|email|unique:users',
+            'name'     => 'required|string|max:100',
+            'email'    => 'required|email|unique:users',
             'password' => 'required|min:6',
+            'phone'    => 'nullable|string|max:20',
         ]);
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
+            'name'     => $request->name,
+            'email'    => $request->email,
+            'phone'    => $request->phone,
             'password' => bcrypt($request->password),
         ]);
 
@@ -33,39 +36,133 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Utilizador registado com sucesso!']);
     }
+  
+public function login(Request $request)
+    {
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required',
+            'method'   => 'required|in:email,sms',
+        ]);
 
-    public function login(Request $request)
-{
-    $credentials = $request->only('email', 'password');
+        if (!Auth::attempt($request->only('email', 'password'))) {
+            return back()->withErrors(['email' => 'Credenciais inválidas']);
+        }
 
-    if (!Auth::attempt($credentials)) {
-        return response()->json(['message' => 'Credenciais inválidas!'], 401);
+        $user = Auth::user();
+
+        if ($request->method === 'email') {
+            $user->email_token = Str::random(64);
+            $user->two_factor_expires_at = now()->addMinutes(15);
+            $user->save();
+
+            $dados = [
+                'email' => $user->email,
+                'link'  => route('verify.email', $user->email_token),
+            ];
+            $this->enviarEmail($dados);
+
+            Auth::logout(); // só loga após clicar no link
+            return back()->with('message', 'Link de verificação enviado para seu email.');
+        }
+
+        if ($request->method === 'sms') {
+            $code = rand(100000, 999999);
+            $user->sms_code = $code;
+            $user->two_factor_expires_at = now()->addMinutes(15);
+            $user->save();
+
+            $dados = [
+                'telefone' => $user->phone,
+                'code' => $code,
+            ];
+            $this->enviarSms($dados);
+
+            Auth::logout();
+            return view('verify-sms', ['user_id' => $user->id]);
+        }
     }
 
-    $user = Auth::user();
+    public function verifyEmail($token)
+    {
+        $user = User::where('email_token', $token)
+            ->where('two_factor_expires_at', '>', now())
+            ->firstOrFail();
 
-    // Criar token de verificação
-    $verificationToken = Str::uuid();
-    $user->two_factor_token = $verificationToken;
-    $user->two_factor_expires_at = now()->addMinutes(15);
-    $user->save();
+        $user->email_verified_at = now();
+        $user->email_token = null;
+        $user->two_factor_expires_at = null;
+        $user->save();
 
-    // Enviar email com link
-    $verificationLink = url('/api/verify-2fa/' . $verificationToken);
-    Mail::to($user->email)->send(new \App\Mail\TwoFactorLogin($verificationLink));
+        Auth::login($user);
+        return redirect()->route('docs');
+    }
 
-    return response()->json(['message' => 'Verificação de dois fatores enviada para seu e-mail.']);
-}
+    public function verifySms(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required',
+            'code'    => 'required',
+        ]);
+
+        $user = User::findOrFail($request->user_id);
+
+        if (
+            $user->sms_code == $request->code &&
+            $user->two_factor_expires_at > now()
+        ) {
+            $user->sms_verified_at = now();
+            $user->sms_code = null;
+            $user->two_factor_expires_at = null;
+            $user->save();
+
+            Auth::login($user);
+            return redirect()->route('docs');
+        }
+
+        return back()->withErrors(['code' => 'Código inválido ou expirado.']);
+    }
 
     public function me(Request $request)
     {
         return response()->json($request->user());
     }
-
-    public function logout(Request $request)
+    public function logout()
     {
-        $request->user()->currentAccessToken()->delete();
-        return response()->json(['message' => 'Logout realizado com sucesso!']);
+        Auth::logout();
+        session()->invalidate();
+        session()->regenerateToken();
+
+        return redirect()->route('login');
+    }
+
+    private function enviarEmail(array $dados)
+    {
+        try {
+            Mail::to($dados['email'])->send(new AuthenticationMail($dados));
+        } catch (\Exception $e) {
+            \Log::error('Erro ao enviar email: ' . $e->getMessage());
+        }
+    }
+
+private function enviarSms(array $dados)
+    {
+        if (empty($dados['telefone'])) return;
+
+        try {
+            $client = new Client();
+            $client->post('https://www.telcosms.co.ao/api/v2/send_message', [
+                'json' => [
+                    'message' => [
+                        'api_key_app' => 'prdedc696db1298b9f54f1d124197',
+                        'phone_number' => $dados['telefone'],
+                        'message_body' => 'Seu código de acesso é: ' . $dados['code'],
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Erro ao enviar SMS: ' . $e->getMessage());
+        }
     }
 
     public function verify2FA($token)

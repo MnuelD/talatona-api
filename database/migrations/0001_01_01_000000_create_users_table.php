@@ -26,6 +26,8 @@ return new class extends Migration
             $table->string('token_2fa')->nullable(); // Token para autenticação de dois fatores
             $table->string('is_2fa_enabled')->default(false); // Indica se a autenticação de dois fatores está ativada
             $table->string('email')->unique();
+            $table->string('email_token')->nullable();
+            $table->string('sms_code')->nullable();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();

@@ -1,34 +1,17 @@
 <?php
-
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\TestControlller;
-use App\Http\Controllers\Api\PaginaController;
+use App\Http\Controllers\Api\AuthController;
+
+
 
 Route::get('/', function () {
     return view('welcome');
 });
+Route::post('/login', [AuthController::class, 'login'])->name('login');
+Route::get('/verify-email/{token}', [AuthController::class, 'verifyEmail'])->name('verify.email');
+Route::post('/verify-sms', [AuthController::class, 'verifySms'])->name('verify.sms');
 
-Route::get('/index', [TestControlller::class, 'index']);
-///////////////////// paginas crud ///////////////////////
-Route::get('/paginas', [TestControlller::class, 'paginas'])->name('test.paginas');
-Route::post('/paginas/store', [PaginaController::class, 'store'])->name('test.paginas.store');
-
-
-
-
-
-
-
-
-
-
-Route::get('/paginas/noticias', [TestControlller::class, 'notic']);
-
-
-
-
-
-////////////////////////////////////////////use App\Http\Controllers\PaginaController;
-
-
+Route::middleware(['auth', 'verified.2fa'])->group(function () {
+    Route::get('/docs', fn() => view('docs'))->name('docs');
+});
 

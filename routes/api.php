@@ -2,7 +2,6 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\PaginaController;
 use App\Http\Controllers\Api\BtnController;
 use App\Http\Controllers\Api\DestaqueController;

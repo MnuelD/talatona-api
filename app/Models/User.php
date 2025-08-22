@@ -16,6 +16,8 @@ class User extends Authenticatable implements LaratrustUser
         'name',
         'email',
         'password',
+        'email_token',
+        'sms_code',
     ];
 
     protected $hidden = [
