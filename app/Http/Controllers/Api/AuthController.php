@@ -22,13 +22,13 @@ class AuthController extends Controller
             'name'     => 'required|string|max:100',
             'email'    => 'required|email|unique:users',
             'password' => 'required|min:6',
-            'phone'    => 'nullable|string|max:20',
+            'telefone'    => 'nullable|string|max:20',
         ]);
 
         $user = User::create([
             'name'     => $request->name,
             'email'    => $request->email,
-            'phone'    => $request->phone,
+            'telefone'    => $request->telefone,
             'password' => bcrypt($request->password),
         ]);
 
@@ -50,37 +50,44 @@ public function login(Request $request)
         }
 
         $user = Auth::user();
+       
 
         if ($request->method === 'email') {
-            $user->email_token = Str::random(64);
-            $user->two_factor_expires_at = now()->addMinutes(15);
-            $user->save();
+    $user->email_token = Str::random(64);
 
-            $dados = [
-                'email' => $user->email,
-                'link'  => route('verify.email', $user->email_token),
-            ];
-            $this->enviarEmail($dados);
+    // ✅ define validade de 15 minutos
+    $user->two_factor_expires_at = now()->addMinutes(15);
+    $user->two_factor_verified_at = now(); // 🔑 marca que o 2FA foi cumprido
+    $user->save();
 
-            Auth::logout(); // só loga após clicar no link
-            return back()->with('message', 'Link de verificação enviado para seu email.');
-        }
+    $dados = [
+        'email' => $user->email,
+        'link'  => route('verify.email', $user->email_token),
+    ];
+    $this->enviarEmail($dados);
 
-        if ($request->method === 'sms') {
-            $code = rand(100000, 999999);
-            $user->sms_code = $code;
-            $user->two_factor_expires_at = now()->addMinutes(15);
-            $user->save();
+    Auth::logout();
+    return back()->with('message', 'Link de verificação enviado para seu email.');
+}
 
-            $dados = [
-                'telefone' => $user->phone,
-                'code' => $code,
-            ];
-            $this->enviarSms($dados);
+if ($request->method === 'sms') {
+    $code = rand(100000, 999999);
+    $user->sms_code = $code;
 
-            Auth::logout();
-            return view('verify-sms', ['user_id' => $user->id]);
-        }
+    // ✅ define validade de 15 minutos
+    $user->two_factor_expires_at = now()->addMinutes(15);
+   
+    $user->save();
+
+    $dados = [
+        'telefone' => $user->telefone,
+        'code' => $code,
+    ];
+    $this->enviarSms($dados);
+
+    Auth::logout();
+    return view('verify', ['user_id' => $user->id]);
+}
     }
 
     public function verifyEmail($token)
@@ -105,20 +112,25 @@ public function login(Request $request)
             'code'    => 'required',
         ]);
 
+
         $user = User::findOrFail($request->user_id);
 
         if (
-            $user->sms_code == $request->code &&
-            $user->two_factor_expires_at > now()
-        ) {
-            $user->sms_verified_at = now();
-            $user->sms_code = null;
-            $user->two_factor_expires_at = null;
-            $user->save();
+                $user->sms_code == $request->code &&
+                $user->two_factor_expires_at > now()
+            ) {
+                $user->sms_verified_at = now();
+                $user->sms_code = null;
+                $user->two_factor_verified_at = now(); // 🔑 marca que o 2FA foi cumprido
 
-            Auth::login($user);
-            return redirect()->route('docs');
-        }
+                // 🔑 aqui limpamos a expiração
+                $user->two_factor_expires_at = null;
+
+                $user->save();
+
+                Auth::login($user);
+                return redirect()->route('docs');
+            }
 
         return back()->withErrors(['code' => 'Código inválido ou expirado.']);
     }

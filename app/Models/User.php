@@ -12,23 +12,27 @@ class User extends Authenticatable implements LaratrustUser
 {
     use HasApiTokens, HasFactory, Notifiable, HasRolesAndPermissions;
 
-    protected $fillable = [
-        'name',
-        'email',
-        'password',
-        'email_token',
-        'sms_code',
-    ];
+    
+protected $fillable = [
+    'name','email','password',
+    'email_token','sms_code','telefone',
+    'two_factor_expires_at','sms_verified_at', 'two_factor_verified_at',
+];
+
+protected $casts = [
+    'email_verified_at'     => 'datetime',
+    'sms_verified_at'       => 'datetime',
+    'two_factor_expires_at' => 'datetime',
+    'two_factor_verified_at' => 'datetime',
+];
+
 
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    protected $casts = [
-        'email_verified_at' => 'datetime',
-        'password' => 'hashed',
-    ];
+ 
 
     public function municipes()
     {

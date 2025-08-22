@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Aqui você registra middlewares globais ou de rota
+        
 
         // 🔐 Middlewares de rota (nomeados)
         $middleware->alias([
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middlewares\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middlewares\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middlewares\RoleOrPermissionMiddleware::class,
+            'verified.2fa' => \App\Http\Middleware\TwoFactorVerified::class,
         ]);
         // 👇 aplica o SessionTimeout no grupo web
     $middleware->web([
